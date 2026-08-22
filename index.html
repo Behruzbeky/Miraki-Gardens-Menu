@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#6fa22e">
+<title>Miraki Gardens — Menu</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="images/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="images/logo.png" alt="Miraki Gardens" class="brand-logo">
+    </div>
+    <div class="topbar-right">
+      <div class="lang-switch" id="langSwitch"></div>
+    </div>
+  </header>
+
+  <div class="group-tabs" id="groupTabs"></div>
+
+  <div class="searchbar">
+    <span class="search-ico">⌕</span>
+    <input type="text" id="searchInput" autocomplete="off">
+    <button class="search-clear" id="searchClear" hidden>×</button>
+  </div>
+
+  <main class="layout">
+    <nav class="rail" id="rail" aria-label="categories"></nav>
+    <section class="content" id="content"></section>
+  </main>
+
+  <!-- floating cart button (small screens) -->
+  <button class="cart-fab" id="cartFab" hidden>
+    <span class="fab-ico">🛒</span>
+    <span class="fab-count" id="fabCount">0</span>
+    <span class="fab-total" id="fabTotal"></span>
+  </button>
+
+  <!-- cart panel -->
+  <aside class="cart" id="cart">
+    <div class="cart-head">
+      <h2 id="cartTitle">Savat</h2>
+      <button class="cart-close" id="cartClose">×</button>
+    </div>
+    <div class="cart-body" id="cartBody"></div>
+    <div class="cart-foot" id="cartFoot"></div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <!-- order confirmation modal -->
+  <div class="modal" id="orderModal" hidden>
+    <div class="modal-card">
+      <div class="modal-ico">✓</div>
+      <h2 id="modalTitle"></h2>
+      <p id="modalMsg"></p>
+      <div class="modal-order" id="modalOrder"></div>
+      <button class="btn-primary" id="modalOk"></button>
+    </div>
+  </div>
+
+  <script src="menu-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

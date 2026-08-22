@@ -1,0 +1,17 @@
+{
+  "name": "Miraki Gardens Menu",
+  "short_name": "Miraki Menu",
+  "description": "Miraki Gardens restaurant tablet menu",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f3ec",
+  "theme_color": "#6fa22e",
+  "lang": "ru",
+  "icons": [
+    { "src": "images/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "images/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "images/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
