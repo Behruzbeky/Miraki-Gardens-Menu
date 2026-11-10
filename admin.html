@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#6fa22e">
+<title>Miraki Gardens — Админ меню</title>
+<link rel="icon" href="images/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+  <!-- ===== Login ===== -->
+  <section id="login" class="login" hidden>
+    <div class="login-card">
+      <img src="images/logo.png" alt="Miraki Gardens" class="login-logo">
+      <h1 data-t="loginTitle"></h1>
+      <p class="muted" data-t="loginText"></p>
+      <label class="field">
+        <span data-t="tokenLabel"></span>
+        <input id="tokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+      </label>
+      <button class="btn btn-primary btn-wide" id="loginBtn" data-t="loginBtn"></button>
+      <p class="login-err" id="loginErr" hidden></p>
+      <details class="howto">
+        <summary data-t="howtoTitle"></summary>
+        <ol id="howtoList"></ol>
+      </details>
+      <div class="lang-mini" id="loginLang"></div>
+    </div>
+  </section>
+
+  <!-- ===== App ===== -->
+  <div id="app" class="app" hidden>
+    <header class="topbar">
+      <div class="tb-left">
+        <img src="images/logo.png" alt="" class="tb-logo">
+        <div class="tb-title" data-t="appTitle"></div>
+        <span class="status" id="status"></span>
+      </div>
+      <div class="tb-right">
+        <div class="lang-mini" id="appLang"></div>
+        <a class="btn btn-ghost" href="./" target="_blank" rel="noopener" data-t="openMenu"></a>
+        <button class="btn btn-ghost" id="discardBtn" data-t="discard" hidden></button>
+        <button class="btn btn-primary" id="publishBtn" data-t="publish"></button>
+        <button class="icon-btn" id="settingsBtn" aria-label="settings">⚙</button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <div class="seg" id="groupTabs"></div>
+      <div class="search">
+        <span class="search-ico">⌕</span>
+        <input id="searchInput" type="search" autocomplete="off">
+      </div>
+    </div>
+
+    <main class="main">
+      <nav class="cats" id="cats"></nav>
+      <section class="items" id="items"></section>
+    </main>
+  </div>
+
+  <!-- ===== Item / category editor (sheet) ===== -->
+  <div class="sheet-wrap" id="sheetWrap" hidden>
+    <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <!-- ===== Busy overlay ===== -->
+  <div class="busy" id="busy" hidden><div class="busy-card"><div class="spinner"></div><div id="busyText"></div></div></div>
+
+  <!-- ===== Toast ===== -->
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="admin.js"></script>
+</body>
+</html>

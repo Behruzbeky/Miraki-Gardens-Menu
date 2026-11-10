@@ -1,7 +1,9 @@
-/* Miraki Gardens menu — offline service worker */
-var CACHE = "miraki-menu-v1";
+/* Miraki Gardens menu — offline service worker
+   - pages, scripts, styles, menu-data.js: network first (fresh menu after admin edits), cache as offline fallback
+   - images: cache first (photo files never change; new photos get new file names) */
+var CACHE = "miraki-menu-v2";
 var CORE = [
-  "index.html", "styles.css", "app.js", "menu-data.js", "manifest.json",
+  "./", "index.html", "styles.css", "app.js", "menu-data.js", "manifest.json",
   "images/logo.png", "images/icon-192.png", "images/icon-512.png"
 ];
 
@@ -16,19 +18,33 @@ self.addEventListener("activate", function(e){
   }).then(function(){ return self.clients.claim(); }));
 });
 
-// cache-first, then network; runtime-cache images and anything successfully fetched
+function put(req, res){
+  if(res && res.status===200 && res.type==="basic"){
+    var copy=res.clone();
+    caches.open(CACHE).then(function(c){ c.put(req, copy); });
+  }
+  return res;
+}
+
 self.addEventListener("fetch", function(e){
-  if(e.request.method!=="GET") return;
+  var req=e.request;
+  if(req.method!=="GET") return;
+  var url=new URL(req.url);
+  if(url.origin!==self.location.origin) return;           // fonts, GitHub API etc. go straight to network
+  if(url.pathname.indexOf("admin")>=0) return;             // admin panel always online
+  if(url.search) return;                                   // update checks (?check=…) bypass the cache
+
+  if(/\/images\//.test(url.pathname)){
+    e.respondWith(caches.match(req).then(function(hit){
+      return hit || fetch(req).then(function(res){ return put(req, res); });
+    }));
+    return;
+  }
+
   e.respondWith(
-    caches.match(e.request).then(function(hit){
-      if(hit) return hit;
-      return fetch(e.request).then(function(res){
-        if(res && res.status===200 && res.type==="basic"){
-          var copy=res.clone();
-          caches.open(CACHE).then(function(c){ c.put(e.request, copy); });
-        }
-        return res;
-      }).catch(function(){ return caches.match("index.html"); });
-    })
+    fetch(req.mode==="navigate" ? req : new Request(req, {cache:"no-cache"})).then(function(res){ return put(req, res); })
+      .catch(function(){
+        return caches.match(req).then(function(hit){ return hit || caches.match("index.html"); });
+      })
   );
 });

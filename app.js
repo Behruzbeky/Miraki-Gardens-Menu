@@ -1,4 +1,5 @@
-/* Miraki Gardens — tablet menu app (Level 1: browse + cart + call waiter) */
+/* Miraki Gardens — tablet menu app (Level 1: browse + cart + call waiter)
+   Menu content lives in menu-data.js and is edited with admin.html. */
 (function(){
   "use strict";
   var DATA = window.MENU;
@@ -18,10 +19,18 @@
   function tt(obj){ return obj ? (obj[state.lang]||obj.ru||obj.en||"") : ""; }
   function money(n){ return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g," "); }
   function som(){ return t("som"); }
+  // hidden categories / items (stop-list) are not shown on the tablets
+  function visible(x){ return x && !x.hidden; }
+  function visItems(c){ return (c.items||[]).filter(visible); }
   var ITEMS = {};   // id -> {item, cat}
-  DATA.categories.forEach(function(c){ c.items.forEach(function(it){ ITEMS[it.id]={item:it,cat:c}; }); });
+  DATA.categories.filter(visible).forEach(function(c){ visItems(c).forEach(function(it){ ITEMS[it.id]={item:it,cat:c}; }); });
+  // drop cart lines whose dish was removed or hidden since last visit
+  for(var cid in state.cart){ if(!ITEMS[cid]) delete state.cart[cid]; }
 
-  function imgFor(item){ return item.img ? "images/"+item.img+".webp" : null; }
+  function imgFor(item){
+    if(!item.img) return null;
+    return "images/"+(item.img.indexOf(".")>=0 ? item.img : item.img+".webp");
+  }
   function saveCart(){ localStorage.setItem("mg_cart", JSON.stringify(state.cart)); }
   function cartCount(){ var n=0; for(var k in state.cart) n+=state.cart[k]; return n; }
   function subtotal(){ var s=0; for(var k in state.cart){ if(ITEMS[k]) s+=ITEMS[k].item.price*state.cart[k]; } return s; }
@@ -47,7 +56,7 @@
       el.appendChild(b);
     });
   }
-  function catsOfGroup(){ return DATA.categories.filter(function(c){return c.group===state.group;}); }
+  function catsOfGroup(){ return DATA.categories.filter(function(c){return c.group===state.group && visible(c);}); }
   function firstCat(){ var c=catsOfGroup()[0]; return c?c.id:null; }
 
   // ---- render: rail ----
@@ -111,7 +120,7 @@
     if(state.search){
       var q=state.search.toLowerCase();
       var results=[];
-      catsOfGroup().forEach(function(c){ c.items.forEach(function(it){
+      catsOfGroup().forEach(function(c){ visItems(c).forEach(function(it){
         var hay=(tt(it.name)+" "+tt(it.desc)+" "+it.name.en+" "+it.name.uz+" "+it.name.ru).toLowerCase();
         if(hay.indexOf(q)>=0) results.push(it);
       });});
@@ -129,7 +138,7 @@
     el.appendChild(title);
     var note=document.createElement("p"); note.className="cat-note"; note.textContent=t("priceNote"); el.appendChild(note);
     var grid=document.createElement("div"); grid.className="grid";
-    cat.items.forEach(function(it){ grid.appendChild(dishCard(it)); });
+    visItems(cat).forEach(function(it){ grid.appendChild(dishCard(it)); });
     el.appendChild(grid);
   }
 
@@ -238,7 +247,7 @@
     if(!h) return;
     var parts=h.split("/");
     if(parts[0]==="food"||parts[0]==="drinks") state.group=parts[0];
-    if(parts[1] && DATA.categories.some(function(c){return c.id===parts[1] && c.group===state.group;})) state.cat=parts[1];
+    if(parts[1] && catsOfGroup().some(function(c){return c.id===parts[1];})) state.cat=parts[1];
   }
 
   // init
@@ -247,6 +256,23 @@
   applyHash();
   renderAll(); initCartToggle();
   window.addEventListener("hashchange",function(){ applyHash(); renderGroups(); renderRail(); renderContent(); });
+
+  // ---- live menu updates ----
+  // When admins publish a new menu, tablets pick it up by themselves:
+  // every few minutes we check menu-data.js and reload once nobody is in the middle of an order.
+  var pendingUpdate=false;
+  function idle(){ return cartCount()===0 && document.getElementById("orderModal").hidden && !document.getElementById("cart").classList.contains("open"); }
+  function checkForUpdate(){
+    if(!navigator.onLine) return;
+    fetch("menu-data.js?check="+Date.now(), {cache:"no-store"}).then(function(r){ return r.ok ? r.text() : ""; }).then(function(txt){
+      var m=/"updatedAt"\s*:\s*"([^"]+)"/.exec(txt);
+      if(m && m[1]!==(DATA.updatedAt||"")) pendingUpdate=true;
+      if(pendingUpdate && idle()) location.reload();
+    }).catch(function(){});
+  }
+  setInterval(checkForUpdate, 3*60*1000);
+  setInterval(function(){ if(pendingUpdate && idle()) location.reload(); }, 20*1000);
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) checkForUpdate(); });
 
   // service worker
   if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(function(){}); }
