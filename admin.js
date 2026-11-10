@@ -21,6 +21,15 @@
       loginText:"Здесь можно менять блюда, цены, фото и категории. Изменения появятся на планшетах после публикации.",
       tokenLabel:"Ключ доступа (GitHub token)",
       loginBtn:"Войти",
+      pinLabel:"Код доступа", useToken:"Настроить заново по ключу GitHub", usePin:"← Войти по коду",
+      newPinLabel:"Код для сотрудников", newPinHintSet:"Этот код сотрудники будут вводить для входа.",
+      newPinHintKeep:"Оставьте пустым, чтобы не менять текущий код.",
+      setupNote:"Настройка этого устройства (один раз): вставьте ключ GitHub и задайте код. Дальше на этом устройстве вход только по коду.",
+      pinWrong:"Неверный код", pinWait:"Слишком много попыток. Подождите {s} сек.",
+      pinShort:"Код должен быть не короче 4 цифр", pinSaved:"Новый код сохранён на этом устройстве.",
+      noLock:"На этом устройстве вход ещё не настроен — нужен ключ GitHub.", pinWiped:"Слишком много неверных попыток — ключ удалён с этого устройства. Нужна повторная настройка с ключом GitHub.", lockNow:"Заблокировать",
+      pinStale:"Код верный, но сохранённый ключ GitHub больше не работает. Владельцу нужно войти по новому ключу.",
+      changePin:"Новый код для сотрудников",
       howtoTitle:"Как получить ключ доступа (делается один раз)",
       howto:[
         "Войдите в аккаунт GitHub, которому принадлежит сайт меню.",
@@ -65,7 +74,7 @@
       errPhoto:"Не удалось открыть фото. Попробуйте другое (JPG или PNG).",
       draftFull:"Черновик слишком большой для памяти устройства — опубликуйте изменения, чтобы не потерять фото.",
       settings:"Настройки", repoSettings:"Репозиторий (менять не нужно)", owner:"Владелец", repo:"Репозиторий", branch:"Ветка",
-      logout:"Выйти (удалить ключ с этого устройства)", save:"Сохранить",
+      logout:"Удалить ключ с этого устройства", save:"Сохранить",
       lastUpdate:"Последнее обновление меню",
       texts:"Тексты меню", priceNote:"Примечание под названием категории", tagline:"Слоган",
       cmsg:"Обновление меню через админ-панель"
@@ -75,6 +84,15 @@
       loginText:"Bu yerda taomlar, narxlar, rasmlar va kategoriyalarni o‘zgartirish mumkin. O‘zgarishlar e’lon qilingandan keyin planshetlarda chiqadi.",
       tokenLabel:"Kirish kaliti (GitHub token)",
       loginBtn:"Kirish",
+      pinLabel:"Kirish kodi", useToken:"GitHub kaliti bilan qayta sozlash", usePin:"← Kod bilan kirish",
+      newPinLabel:"Xodimlar uchun kod", newPinHintSet:"Xodimlar kirish uchun shu kodni kiritadi.",
+      newPinHintKeep:"Joriy kodni o‘zgartirmaslik uchun bo‘sh qoldiring.",
+      setupNote:"Bu qurilmani sozlash (bir marta): GitHub kalitini qo‘ying va kod belgilang. Keyin bu qurilmada faqat kod bilan kiriladi.",
+      pinWrong:"Kod noto‘g‘ri", pinWait:"Juda ko‘p urinish. {s} soniya kuting.",
+      pinShort:"Kod kamida 4 ta raqam bo‘lishi kerak", pinSaved:"Yangi kod shu qurilmada saqlandi.",
+      noLock:"Bu qurilmada kirish hali sozlanmagan — GitHub kaliti kerak.", pinWiped:"Juda ko‘p noto‘g‘ri urinish — kalit bu qurilmadan o‘chirildi. GitHub kaliti bilan qayta sozlash kerak.", lockNow:"Qulflash",
+      pinStale:"Kod to‘g‘ri, lekin saqlangan GitHub kaliti endi ishlamaydi. Egasi yangi kalit bilan kirishi kerak.",
+      changePin:"Xodimlar uchun yangi kod",
       howtoTitle:"Kirish kalitini qanday olish (bir marta qilinadi)",
       howto:[
         "Menyu sayti tegishli bo‘lgan GitHub akkauntiga kiring.",
@@ -119,7 +137,7 @@
       errPhoto:"Rasmni ochib bo‘lmadi. Boshqasini sinab ko‘ring (JPG yoki PNG).",
       draftFull:"Qoralama qurilma xotirasiga sig‘madi — rasmlar yo‘qolmasligi uchun o‘zgarishlarni e’lon qiling.",
       settings:"Sozlamalar", repoSettings:"Repozitoriy (o‘zgartirish shart emas)", owner:"Egasi", repo:"Repozitoriy", branch:"Branch",
-      logout:"Chiqish (kalitni bu qurilmadan o‘chirish)", save:"Saqlash",
+      logout:"Kalitni bu qurilmadan o‘chirish", save:"Saqlash",
       lastUpdate:"Menyu oxirgi marta yangilangan",
       texts:"Menyu matnlari", priceNote:"Kategoriya nomi ostidagi izoh", tagline:"Shior",
       cmsg:"Admin panel orqali menyu yangilandi"
@@ -127,7 +145,11 @@
   };
 
   // ------------------------------------------------------------------ state
-  var cfg = Object.assign({}, DEFAULT_CFG, readJSON("mg_admin_cfg") || {});
+  var storedCfg = readJSON("mg_admin_cfg") || {};
+  var LEGACY_TOKEN = storedCfg.token || "";            // key saved in plain text by the first version
+  var cfg = Object.assign({}, DEFAULT_CFG, storedCfg, { token:"" });
+  try{ cfg.token = sessionStorage.getItem("mg_admin_tok") || ""; }catch(e){}
+  function saveCfg(){ writeJSON("mg_admin_cfg", { owner:cfg.owner, repo:cfg.repo, branch:cfg.branch }); }
   var S = {
     lang: (function(){ try{ return localStorage.getItem("mg_admin_lang") || "ru"; }catch(e){ return "ru"; } })(),
     menu: null,          // working copy of window.MENU
@@ -321,29 +343,103 @@
       p = loadFromGitHub();
     }
     p.then(showApp).catch(function(e){
-      if(e && e.status===401){ cfg.token=""; writeJSON("mg_admin_cfg", cfg); showLogin(errText(e)); }
+      if(e && e.status===401){ setSessionToken(""); showLogin(errText(e)); }
       else { showLogin(errText(e)); }
     });
   }
 
-  // ------------------------------------------------------------------ login
-  function showLogin(err){
-    $("app").hidden = true; $("login").hidden = false;
-    $("loginErr").hidden = !err; $("loginErr").textContent = err || "";
-    $("tokenInput").value = cfg.token || "";
+  // ------------------------------------------------------------------ device code (PIN)
+  // The GitHub key never leaves this device: it is stored here encrypted with the code
+  // (PBKDF2-SHA256 + AES-GCM). Day to day the admin types only the code.
+  var LOCK_KEY = "mg_admin_lock", TOK_KEY = "mg_admin_tok", PBKDF2_ITER = 310000, MAX_FAILS = 10;
+  function bytesToB64(u8){ var s=""; for(var i=0;i<u8.length;i++) s+=String.fromCharCode(u8[i]); return btoa(s); }
+  function b64ToBytes(b64){ var s=atob(b64), u=new Uint8Array(s.length); for(var i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
+  function pinKey(pin, salt, iter){
+    return crypto.subtle.importKey("raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveKey"]).then(function(k){
+      return crypto.subtle.deriveKey({ name:"PBKDF2", salt:salt, iterations:iter, hash:"SHA-256" }, k, { name:"AES-GCM", length:256 }, false, ["encrypt","decrypt"]);
+    });
   }
-  function doLogin(){
-    var tok = $("tokenInput").value.trim();
+  function encryptToken(token, pin){
+    var salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    return pinKey(pin, salt, PBKDF2_ITER).then(function(key){
+      return crypto.subtle.encrypt({ name:"AES-GCM", iv:iv }, key, new TextEncoder().encode(token));
+    }).then(function(ct){
+      return { v:1, iter:PBKDF2_ITER, salt:bytesToB64(salt), iv:bytesToB64(iv), data:bytesToB64(new Uint8Array(ct)), fails:0 };
+    });
+  }
+  function decryptToken(lock, pin){
+    return pinKey(pin, b64ToBytes(lock.salt), lock.iter).then(function(key){
+      return crypto.subtle.decrypt({ name:"AES-GCM", iv:b64ToBytes(lock.iv) }, key, b64ToBytes(lock.data));
+    }).then(function(pt){ return new TextDecoder().decode(pt); });
+  }
+  function getLock(){ var l = readJSON(LOCK_KEY); return (l && l.data) ? l : null; }
+  function saveLocalLock(pin){ return encryptToken(cfg.token, pin).then(function(l){ writeJSON(LOCK_KEY, l); }); }
+  function removeLock(){ try{ localStorage.removeItem(LOCK_KEY); }catch(e){} }
+  function setSessionToken(t){ cfg.token = t || ""; try{ if(t) sessionStorage.setItem(TOK_KEY, t); else sessionStorage.removeItem(TOK_KEY); }catch(e){} }
+  function validPin(p){ return /^\d{4,16}$/.test(p); }
+
+  // ------------------------------------------------------------------ login
+  var pinBlockedUntil = 0;
+  function showLogin(err, forceToken){
+    $("app").hidden = true; $("login").hidden = false;
+    setLoginErr(err);
+    var lock = getLock(), tokenMode = forceToken || !lock;
+    $("pinBox").hidden = tokenMode;
+    $("tokenBox").hidden = !tokenMode;
+    $("setupNote").hidden = false;
+    $("toPinBtn").hidden = !lock;
+    $("tokenInput").value = (!lock && LEGACY_TOKEN) ? LEGACY_TOKEN : "";
+    $("pinInput").value = "";
+    $("newPinInput").value = "8008";
+    $("newPinHint").textContent = T("newPinHintSet");
+    setTimeout(function(){ (tokenMode ? $("tokenInput") : $("pinInput")).focus(); }, 50);
+  }
+  function setLoginErr(msg){ $("loginErr").hidden = !msg; $("loginErr").textContent = msg || ""; }
+
+  function enterWithToken(){
+    return gh("").then(function(){ return loadFromGitHub(); }).then(function(){ showApp(); });
+  }
+  function doPinLogin(){
+    var pin = $("pinInput").value.trim(), lock = getLock();
+    if(!pin){ $("pinInput").focus(); return; }
+    if(!lock){ showLogin(T("noLock"), true); return; }
+    var wait = Math.ceil((pinBlockedUntil - Date.now())/1000);
+    if(wait > 0){ setLoginErr(T("pinWait",{s:wait})); return; }
+    $("pinBtn").disabled = true; setLoginErr("");
+    decryptToken(lock, pin).then(function(tok){
+      lock.fails = 0; writeJSON(LOCK_KEY, lock);
+      setSessionToken(tok);
+      busy(true, T("busyLoad"));
+      return enterWithToken().catch(function(e){
+        setSessionToken("");
+        throw (e && e.status===401) ? new ApiError(-2, T("pinStale")) : e;
+      });
+    }, function(){
+      lock.fails = (lock.fails||0) + 1;
+      if(lock.fails >= MAX_FAILS){ removeLock(); throw new ApiError(-3, T("pinWiped")); }
+      writeJSON(LOCK_KEY, lock);
+      if(lock.fails % 5 === 0) pinBlockedUntil = Date.now() + 30000;
+      throw new ApiError(-1, T("pinWrong"));
+    }).catch(function(e){
+      busy(false);
+      if(e && e.status===-3){ showLogin(e.message, true); return; }
+      setLoginErr(e && e.status<0 ? e.message : errText(e));
+      $("pinInput").value = ""; $("pinInput").focus();
+    }).finally(function(){ $("pinBtn").disabled = false; });
+  }
+  function doLogin(){ // owner: GitHub key + code for this device
+    var tok = $("tokenInput").value.trim(), pin = $("newPinInput").value.trim();
     if(!tok){ $("tokenInput").focus(); return; }
-    cfg.token = tok;
-    $("loginBtn").disabled = true;
-    gh("").then(function(){
-      writeJSON("mg_admin_cfg", cfg);
-      return loadFromGitHub();
-    }).then(function(){ clearDraft(); showApp(); })
-      .catch(function(e){ showLogin(errText(e)); })
+    if(!validPin(pin)){ setLoginErr(T("pinShort")); $("newPinInput").focus(); return; }
+    $("loginBtn").disabled = true; setLoginErr("");
+    setSessionToken(tok);
+    gh("").then(function(){ return saveLocalLock(pin); })
+      .then(function(){ LEGACY_TOKEN = ""; saveCfg(); clearDraft(); return loadFromGitHub(); })
+      .then(function(){ showApp(); })
+      .catch(function(e){ setSessionToken(""); setLoginErr(errText(e)); })
       .finally(function(){ $("loginBtn").disabled = false; });
   }
+  function lockNow(){ setSessionToken(""); closeSheet(); showLogin(); }
 
   // ------------------------------------------------------------------ static texts / lang
   function applyStaticTexts(){
@@ -682,25 +778,37 @@
       '<h3>'+esc(T("settings"))+'<button class="icon-btn sm" data-x>✕</button></h3>'+
       '<p class="muted" style="margin:0 0 6px;font-size:13px">'+esc(T("lastUpdate"))+': <b>'+esc(S.menu.updatedAt ? new Date(S.menu.updatedAt).toLocaleString() : "—")+'</b></p>'+
       langFields("pn", pn, T("priceNote"), true)+
+      '<div class="section-label">'+esc(T("pinLabel"))+'</div>'+
+      '<label class="field"><span>'+esc(T("changePin"))+'</span><input id="sPin" class="pin" type="text" inputmode="numeric" maxlength="16" autocomplete="off">'+
+      '<div class="hint">'+esc(T("newPinHintKeep"))+'</div></label>'+
       '<div class="section-label">'+esc(T("repoSettings"))+'</div>'+
       '<div class="row2"><label class="field"><span>'+esc(T("owner"))+'</span><input id="sOwner" value="'+esc(cfg.owner)+'"></label>'+
       '<label class="field"><span>'+esc(T("repo"))+'</span><input id="sRepo" value="'+esc(cfg.repo)+'"></label></div>'+
       '<label class="field"><span>'+esc(T("branch"))+'</span><input id="sBranch" value="'+esc(cfg.branch)+'"></label>'+
-      '<div class="sheet-foot"><button class="btn btn-danger" id="sLogout">'+esc(T("logout"))+'</button>'+
+      '<div class="sheet-foot"><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-ghost" id="sLock">🔒 '+esc(T("lockNow"))+'</button>'+
+      '<button class="btn btn-danger" id="sLogout">'+esc(T("logout"))+'</button></div>'+
       '<div class="right"><button class="btn btn-ghost" data-x>'+esc(T("cancel"))+'</button><button class="btn btn-primary" id="sSave">'+esc(T("save"))+'</button></div></div>'
     );
     $("sheet").querySelectorAll("[data-x]").forEach(function(b){ b.onclick = closeSheet; });
+    $("sLock").onclick = lockNow;
     $("sLogout").onclick = function(){
       if(S.dirty && !confirm(T("leaveQ")+" "+T("discardQ"))) return;
-      cfg.token = ""; writeJSON("mg_admin_cfg", cfg); clearDraft(); S.dirty=false; closeSheet(); showLogin();
+      setSessionToken(""); removeLock(); clearDraft(); S.dirty=false; closeSheet(); showLogin();
     };
     $("sSave").onclick = function(){
+      var newPin = $("sPin").value.trim();
+      if(newPin){
+        if(!validPin(newPin)){ toast(T("pinShort"), "err"); $("sPin").focus(); return; }
+        busy(true, T("busyPub"));
+        saveLocalLock(newPin).then(function(){ toast(T("pinSaved"), "ok", 6000); }, function(e){ toast(errText(e), "err", 7000); })
+          .finally(function(){ busy(false); });
+      }
       var newPn = readLang("pn");
       if(JSON.stringify(newPn) !== JSON.stringify(pn)){ S.menu.ui = S.menu.ui || {}; S.menu.ui.priceNote = newPn; markDirty(); }
       var o=$("sOwner").value.trim(), r=$("sRepo").value.trim(), b=$("sBranch").value.trim();
       var repoChanged = o!==cfg.owner || r!==cfg.repo || b!==cfg.branch;
       if(repoChanged && o && r && b){
-        cfg.owner=o; cfg.repo=r; cfg.branch=b; writeJSON("mg_admin_cfg", cfg);
+        cfg.owner=o; cfg.repo=r; cfg.branch=b; saveCfg();
         closeSheet(); boot(); return;
       }
       closeSheet(); renderAll();
@@ -745,7 +853,7 @@
       if(e === "cancel") return;
       if(e && e.status===422) toast(T("conflict").split(".")[0]+". "+T("errGeneric")+e.message, "err", 7000);
       else toast(errText(e), "err", 7000);
-      if(e && e.status===401){ cfg.token=""; writeJSON("mg_admin_cfg", cfg); showLogin(errText(e)); }
+      if(e && e.status===401){ setSessionToken(""); showLogin(errText(e)); }
     }).finally(function(){ busy(false); });
   }
 
@@ -758,6 +866,10 @@
   // ------------------------------------------------------------------ wire up
   $("loginBtn").onclick = doLogin;
   $("tokenInput").addEventListener("keydown", function(e){ if(e.key==="Enter") doLogin(); });
+  $("pinBtn").onclick = doPinLogin;
+  $("pinInput").addEventListener("keydown", function(e){ if(e.key==="Enter") doPinLogin(); });
+  $("toTokenBtn").onclick = function(){ showLogin("", true); };
+  $("toPinBtn").onclick = function(){ showLogin(""); };
   $("cats").addEventListener("click", onCatsClick);
   $("items").addEventListener("click", onItemsClick);
   $("items").addEventListener("change", onItemsChange);

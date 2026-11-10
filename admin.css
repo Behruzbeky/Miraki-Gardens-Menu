@@ -46,7 +46,7 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 .howto ol{padding-left:20px;margin:10px 0 0}
 .howto li{margin-bottom:6px}
 .howto code{background:var(--bg-2);padding:1px 6px;border-radius:6px;font-size:12.5px}
-.login .lang-mini{justify-content:center;margin-top:18px}
+.login .lang-mini{width:max-content;margin:18px auto 0}
 
 /* ---------- fields ---------- */
 .field{display:block;margin-bottom:14px}
@@ -190,3 +190,8 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
   .sheet{padding:18px 16px}
   .tb-right .btn-ghost[href]{display:none}
 }
+
+/* ---------- staff code login ---------- */
+.pin{font-size:26px!important;letter-spacing:.4em;text-align:center;font-weight:800}
+.linkbtn{display:block;margin:14px auto 0;border:0;background:transparent;color:var(--green-dd);font-weight:700;font-size:13.5px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.setup-note{background:var(--amber-bg);color:#7a5414;border-radius:var(--r-sm);padding:10px 12px;font-size:13.5px;line-height:1.5;margin:0 0 14px}
