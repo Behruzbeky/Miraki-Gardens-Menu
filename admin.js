@@ -1,13 +1,13 @@
 /* Miraki Gardens — menu admin panel
-   Edits menu-data.js and photos in the GitHub repo that hosts the menu (GitHub Pages).
-   No server: changes are committed with the GitHub API using a personal access token
-   that is stored only on this device. */
+   Login with the admin password. The menu and new photos are saved to the cloud
+   (Supabase, see cloud-config.js) through the "menu-admin" function, which checks the password.
+   The tablets read the menu from the same place. */
 (function(){
   "use strict";
 
   // ------------------------------------------------------------------ config
-  var DEFAULT_CFG = { owner:"Behruzbeky", repo:"miraki-gardens-menu", branch:"main", token:"" };
-  var DATA_PATH = "menu-data.js";
+  var C = window.MENU_CLOUD;
+  var PASS_KEY = "mg_admin_pass", DRAFT_KEY = "mg_admin_draft_cloud";
   var LANGS = ["ru","uz","en"];
   var LANG_LABEL = { ru:"RU", uz:"UZ", en:"EN" };
   var EMOJI = ["🥗","🍤","🥬","🍲","🍖","🍝","🍕","🍟","🔥","🥫","➕","🍞","🧒","🍰","🍸","🍺","🥃","🍾","🍷",
@@ -19,26 +19,9 @@
     ru:{
       loginTitle:"Админ-панель меню",
       loginText:"Здесь можно менять блюда, цены, фото и категории. Изменения появятся на планшетах после публикации.",
-      tokenLabel:"Ключ доступа (GitHub token)",
       loginBtn:"Войти",
-      pinLabel:"Код доступа", useToken:"Настроить заново по ключу GitHub", usePin:"← Войти по коду",
-      newPinLabel:"Код для сотрудников", newPinHintSet:"Этот код сотрудники будут вводить для входа.",
-      newPinHintKeep:"Оставьте пустым, чтобы не менять текущий код.",
-      setupNote:"Настройка этого устройства (один раз): вставьте ключ GitHub и задайте код. Дальше на этом устройстве вход только по коду.",
-      pinWrong:"Неверный код", pinWait:"Слишком много попыток. Подождите {s} сек.",
-      pinShort:"Код должен быть не короче 4 цифр", pinSaved:"Новый код сохранён на этом устройстве.",
-      noLock:"На этом устройстве вход ещё не настроен — нужен ключ GitHub.", pinWiped:"Слишком много неверных попыток — ключ удалён с этого устройства. Нужна повторная настройка с ключом GitHub.", lockNow:"Заблокировать",
-      pinStale:"Код верный, но сохранённый ключ GitHub больше не работает. Владельцу нужно войти по новому ключу.",
-      changePin:"Новый код для сотрудников",
-      howtoTitle:"Как получить ключ доступа (делается один раз)",
-      howto:[
-        "Войдите в аккаунт GitHub, которому принадлежит сайт меню.",
-        "Откройте <b>github.com/settings/personal-access-tokens/new</b> (Settings → Developer settings → Fine-grained tokens → Generate new token).",
-        "Название — например <code>Miraki menu admin</code>. Срок действия — 1 год (или «No expiration»).",
-        "Repository access → <b>Only select repositories</b> → выберите <code>miraki-gardens-menu</code>.",
-        "Permissions → Repository permissions → <b>Contents: Read and write</b>.",
-        "Нажмите <b>Generate token</b>, скопируйте ключ (начинается с <code>github_pat_</code>) и вставьте сюда."
-      ],
+      passLabel:"Пароль", passWrong:"Неверный пароль",
+      locked:"Слишком много неверных попыток. Попробуйте через 15 минут.",
       appTitle:"Админ-панель меню",
       openMenu:"Открыть меню ↗", publish:"Опубликовать", discard:"Отменить изменения",
       stPublished:"Всё опубликовано", stDirty:"Есть неопубликованные изменения",
@@ -61,47 +44,27 @@
       delCatQ:"Удалить категорию «{n}»?",
       delCatItemsQ:"В категории «{n}» {c} блюд. Удалить категорию вместе со всеми блюдами?",
       busyLoad:"Загружаю меню…", busyPhoto:"Обрабатываю фото…", busyPub:"Публикую…",
-      pubOk:"Опубликовано! На планшетах меню обновится в течение 1–10 минут.",
+      pubOk:"Опубликовано! Планшеты обновят меню в течение 1–3 минут.",
       pubNothing:"Нет изменений для публикации.",
       conflict:"Меню уже изменили с другого устройства после того, как вы его открыли. Если продолжить — ваши изменения заменят чужие. Продолжить?",
       draftQ:"Найден неопубликованный черновик ({d}). Продолжить с ним?\n\n«Отмена» — загрузить опубликованное меню.",
       discardQ:"Отменить все неопубликованные изменения?",
       leaveQ:"Есть неопубликованные изменения.",
-      errToken:"Ключ не подходит или устарел. Войдите заново.",
-      errPerm:"У ключа нет права на запись. Проверьте: Contents — Read and write, доступ к репозиторию miraki-gardens-menu.",
-      errNet:"Нет связи с GitHub. Проверьте интернет и попробуйте ещё раз.",
+      errNet:"Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.",
       errGeneric:"Ошибка: ",
       errPhoto:"Не удалось открыть фото. Попробуйте другое (JPG или PNG).",
       draftFull:"Черновик слишком большой для памяти устройства — опубликуйте изменения, чтобы не потерять фото.",
-      settings:"Настройки", repoSettings:"Репозиторий (менять не нужно)", owner:"Владелец", repo:"Репозиторий", branch:"Ветка",
-      logout:"Удалить ключ с этого устройства", save:"Сохранить",
+      settings:"Настройки",
+      logout:"Выйти", save:"Сохранить",
       lastUpdate:"Последнее обновление меню",
-      texts:"Тексты меню", priceNote:"Примечание под названием категории", tagline:"Слоган",
-      cmsg:"Обновление меню через админ-панель"
+      texts:"Тексты меню", priceNote:"Примечание под названием категории", tagline:"Слоган"
     },
     uz:{
       loginTitle:"Menyu admin paneli",
       loginText:"Bu yerda taomlar, narxlar, rasmlar va kategoriyalarni o‘zgartirish mumkin. O‘zgarishlar e’lon qilingandan keyin planshetlarda chiqadi.",
-      tokenLabel:"Kirish kaliti (GitHub token)",
       loginBtn:"Kirish",
-      pinLabel:"Kirish kodi", useToken:"GitHub kaliti bilan qayta sozlash", usePin:"← Kod bilan kirish",
-      newPinLabel:"Xodimlar uchun kod", newPinHintSet:"Xodimlar kirish uchun shu kodni kiritadi.",
-      newPinHintKeep:"Joriy kodni o‘zgartirmaslik uchun bo‘sh qoldiring.",
-      setupNote:"Bu qurilmani sozlash (bir marta): GitHub kalitini qo‘ying va kod belgilang. Keyin bu qurilmada faqat kod bilan kiriladi.",
-      pinWrong:"Kod noto‘g‘ri", pinWait:"Juda ko‘p urinish. {s} soniya kuting.",
-      pinShort:"Kod kamida 4 ta raqam bo‘lishi kerak", pinSaved:"Yangi kod shu qurilmada saqlandi.",
-      noLock:"Bu qurilmada kirish hali sozlanmagan — GitHub kaliti kerak.", pinWiped:"Juda ko‘p noto‘g‘ri urinish — kalit bu qurilmadan o‘chirildi. GitHub kaliti bilan qayta sozlash kerak.", lockNow:"Qulflash",
-      pinStale:"Kod to‘g‘ri, lekin saqlangan GitHub kaliti endi ishlamaydi. Egasi yangi kalit bilan kirishi kerak.",
-      changePin:"Xodimlar uchun yangi kod",
-      howtoTitle:"Kirish kalitini qanday olish (bir marta qilinadi)",
-      howto:[
-        "Menyu sayti tegishli bo‘lgan GitHub akkauntiga kiring.",
-        "<b>github.com/settings/personal-access-tokens/new</b> sahifasini oching (Settings → Developer settings → Fine-grained tokens → Generate new token).",
-        "Nomi — masalan <code>Miraki menu admin</code>. Muddati — 1 yil (yoki «No expiration»).",
-        "Repository access → <b>Only select repositories</b> → <code>miraki-gardens-menu</code> ni tanlang.",
-        "Permissions → Repository permissions → <b>Contents: Read and write</b>.",
-        "<b>Generate token</b> ni bosing, kalitni nusxalang (<code>github_pat_</code> bilan boshlanadi) va shu yerga qo‘ying."
-      ],
+      passLabel:"Parol", passWrong:"Parol noto‘g‘ri",
+      locked:"Juda ko‘p noto‘g‘ri urinish. 15 daqiqadan keyin urinib ko‘ring.",
       appTitle:"Menyu admin paneli",
       openMenu:"Menyuni ochish ↗", publish:"E’lon qilish", discard:"O‘zgarishlarni bekor qilish",
       stPublished:"Hammasi e’lon qilingan", stDirty:"E’lon qilinmagan o‘zgarishlar bor",
@@ -124,38 +87,30 @@
       delCatQ:"«{n}» kategoriyasi o‘chirilsinmi?",
       delCatItemsQ:"«{n}» kategoriyasida {c} ta taom bor. Kategoriya barcha taomlari bilan o‘chirilsinmi?",
       busyLoad:"Menyu yuklanmoqda…", busyPhoto:"Rasm tayyorlanmoqda…", busyPub:"E’lon qilinmoqda…",
-      pubOk:"E’lon qilindi! Planshetlarda menyu 1–10 daqiqada yangilanadi.",
+      pubOk:"E’lon qilindi! Planshetlar menyuni 1–3 daqiqada yangilaydi.",
       pubNothing:"E’lon qilish uchun o‘zgarish yo‘q.",
       conflict:"Siz ochgandan keyin menyu boshqa qurilmadan o‘zgartirilgan. Davom etsangiz, sizning o‘zgarishlaringiz ularning o‘rnini egallaydi. Davom etilsinmi?",
       draftQ:"E’lon qilinmagan qoralama topildi ({d}). U bilan davom etilsinmi?\n\n«Bekor qilish» — e’lon qilingan menyuni yuklash.",
       discardQ:"Barcha e’lon qilinmagan o‘zgarishlar bekor qilinsinmi?",
       leaveQ:"E’lon qilinmagan o‘zgarishlar bor.",
-      errToken:"Kalit mos emas yoki muddati o‘tgan. Qaytadan kiring.",
-      errPerm:"Kalitda yozish huquqi yo‘q. Tekshiring: Contents — Read and write, miraki-gardens-menu repozitoriyasiga ruxsat.",
-      errNet:"GitHub bilan aloqa yo‘q. Internetni tekshirib, qayta urinib ko‘ring.",
+      errNet:"Server bilan aloqa yo‘q. Internetni tekshirib, qayta urinib ko‘ring.",
       errGeneric:"Xatolik: ",
       errPhoto:"Rasmni ochib bo‘lmadi. Boshqasini sinab ko‘ring (JPG yoki PNG).",
       draftFull:"Qoralama qurilma xotirasiga sig‘madi — rasmlar yo‘qolmasligi uchun o‘zgarishlarni e’lon qiling.",
-      settings:"Sozlamalar", repoSettings:"Repozitoriy (o‘zgartirish shart emas)", owner:"Egasi", repo:"Repozitoriy", branch:"Branch",
-      logout:"Kalitni bu qurilmadan o‘chirish", save:"Saqlash",
+      settings:"Sozlamalar",
+      logout:"Chiqish", save:"Saqlash",
       lastUpdate:"Menyu oxirgi marta yangilangan",
-      texts:"Menyu matnlari", priceNote:"Kategoriya nomi ostidagi izoh", tagline:"Shior",
-      cmsg:"Admin panel orqali menyu yangilandi"
+      texts:"Menyu matnlari", priceNote:"Kategoriya nomi ostidagi izoh", tagline:"Shior"
     }
   };
 
   // ------------------------------------------------------------------ state
-  var storedCfg = readJSON("mg_admin_cfg") || {};
-  var LEGACY_TOKEN = storedCfg.token || "";            // key saved in plain text by the first version
-  var cfg = Object.assign({}, DEFAULT_CFG, storedCfg, { token:"" });
-  try{ cfg.token = sessionStorage.getItem("mg_admin_tok") || ""; }catch(e){}
-  function saveCfg(){ writeJSON("mg_admin_cfg", { owner:cfg.owner, repo:cfg.repo, branch:cfg.branch }); }
   var S = {
     lang: (function(){ try{ return localStorage.getItem("mg_admin_lang") || "ru"; }catch(e){ return "ru"; } })(),
-    menu: null,          // working copy of window.MENU
-    baseSha: null,       // commit the working copy started from
-    origText: null,      // menu-data.js text at baseSha
-    newImages: {},       // "images/<file>" -> base64, not yet published
+    password: (function(){ try{ return localStorage.getItem(PASS_KEY) || ""; }catch(e){ return ""; } })(),
+    menu: null,          // working copy of the menu
+    baseUpdated: null,   // cloud version the working copy started from (null = never published yet)
+    newImages: {},       // "<file>" -> base64, not yet published
     dirty: false,
     group: "food",
     catId: null,
@@ -177,18 +132,7 @@
   function writeJSON(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
   function L3(o){ o = o || {}; return { uz:o.uz||"", ru:o.ru||"", en:o.en||"" }; }
   function pick(o){ if(!o) return ""; return o[S.lang] || o.ru || o.uz || o.en || ""; }
-  function draftKey(){ return "mg_admin_draft:"+cfg.owner+"/"+cfg.repo+"@"+cfg.branch; }
-
-  function utf8ToB64(str){
-    var bytes = new TextEncoder().encode(str), bin = "";
-    for(var i=0;i<bytes.length;i+=0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i,i+0x8000));
-    return btoa(bin);
-  }
-  function b64ToUtf8(b64){
-    var bin = atob(String(b64).replace(/\s/g,"")), bytes = new Uint8Array(bin.length);
-    for(var i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
-    return new TextDecoder().decode(bytes);
-  }
+  function draftKey(){ return DRAFT_KEY; }
 
   function toast(msg, kind, ms){
     var el=$("toast"); el.textContent=msg; el.className="toast"+(kind?" "+kind:""); el.hidden=false;
@@ -196,18 +140,18 @@
   }
   function busy(on, text){ $("busy").hidden=!on; $("busyText").textContent=text||""; }
 
-  // ------------------------------------------------------------------ GitHub API
+  // ------------------------------------------------------------------ cloud API
   function ApiError(status, msg){ this.status=status; this.message=msg; }
-  function gh(path, opts){
-    opts = opts || {};
-    var url = "https://api.github.com/repos/"+cfg.owner+"/"+cfg.repo+"/"+path;
-    var init = { method: opts.method || "GET", cache:"no-store",
-      headers: { "Accept":"application/vnd.github+json", "Authorization":"Bearer "+cfg.token, "X-GitHub-Api-Version":"2022-11-28" } };
-    if(opts.body){ init.body = JSON.stringify(opts.body); init.headers["Content-Type"]="application/json"; }
-    return fetch(url, init).catch(function(){ throw new ApiError(0, T("errNet")); }).then(function(r){
+  function api(body){
+    body.password = S.password;
+    return fetch(C.endpoint, {
+      method:"POST", cache:"no-store",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(body)
+    }).catch(function(){ throw new ApiError(0, T("errNet")); }).then(function(r){
       return r.text().then(function(txt){
-        var data=null; try{ data = txt ? JSON.parse(txt) : null; }catch(e){}
-        if(!r.ok) throw new ApiError(r.status, (data && data.message) || ("HTTP "+r.status));
+        var data = {}; try{ data = txt ? JSON.parse(txt) : {}; }catch(e){}
+        if(!r.ok) throw new ApiError(r.status, data.error || ("HTTP "+r.status));
         return data;
       });
     });
@@ -215,78 +159,40 @@
   function errText(e){
     if(!e) return T("errGeneric");
     if(e.status===0) return T("errNet");
-    if(e.status===401) return T("errToken");
-    if(e.status===403 || e.status===404) return T("errPerm");
+    if(e.status===401) return T("passWrong");
+    if(e.status===429) return T("locked");
     return T("errGeneric") + (e.message || e);
   }
-  function getHeadSha(){ return gh("git/ref/heads/"+encodeURIComponent(cfg.branch)).then(function(r){ return r.object.sha; }); }
-  function getFileText(path, ref){
-    return gh("contents/"+path+"?ref="+encodeURIComponent(ref)).then(function(r){
-      if(r.content && r.encoding==="base64") return b64ToUtf8(r.content);
-      // files >1MB come without inline content — fall back to the blob API
-      return gh("git/blobs/"+r.sha).then(function(b){ return b64ToUtf8(b.content); });
-    });
-  }
 
-  // ------------------------------------------------------------------ menu-data.js parse / serialize
-  function parseMenu(text){
-    var sandbox = {};
-    /* the file is our own data file: `window.MENU = {...}` */
-    new Function("window", text)(sandbox);
-    if(!sandbox.MENU || !Array.isArray(sandbox.MENU.categories)) throw new Error("menu-data.js: MENU not found");
-    var m = sandbox.MENU;
+  // ------------------------------------------------------------------ menu data
+  function normalizeMenu(m){
+    if(!m || !Array.isArray(m.categories)) throw new Error("menu: categories not found");
     m.categories.forEach(function(c){
       c.name = L3(c.name); c.items = c.items || [];
       c.items.forEach(function(it){ it.name=L3(it.name); it.desc=L3(it.desc); it.price=Number(it.price)||0; if(it.img==null) it.img=""; if(it.unit==null) it.unit=""; });
     });
     return m;
   }
-  function orderKeys(obj, keys){
-    var out = {};
-    keys.forEach(function(k){ if(obj[k]!==undefined) out[k]=obj[k]; });
-    Object.keys(obj).forEach(function(k){ if(!(k in out)) out[k]=obj[k]; });
-    return out;
+  function parseMenu(text){
+    var sandbox = {};
+    /* built-in data file of this site: `window.MENU = {...}` */
+    new Function("window", text)(sandbox);
+    return normalizeMenu(sandbox.MENU);
   }
-  function cleanItem(it){
-    var o = clone(it);
-    if(!o.hidden) delete o.hidden;
-    return orderKeys(o, ["id","img","unit","price","hidden","name","desc"]);
-  }
-  function serialize(m){
-    var L = [];
-    L.push("/* Miraki Gardens — tablet menu data");
-    L.push("   Edited with admin.html — you can also edit this file by hand (it is plain JSON after `window.MENU =`).");
-    L.push("   Languages: uz (O'zbekcha), ru (Русский), en (English)");
-    L.push("   price: integer in so'm. img: photo file in images/ (name without .webp, or full name with extension).");
-    L.push("   hidden: true = not shown on the tablets (stop-list). */");
-    L.push("window.MENU = {");
-    L.push('  "updatedAt": '+JSON.stringify(m.updatedAt || new Date().toISOString())+",");
-    Object.keys(m).forEach(function(k){
-      if(k==="updatedAt" || k==="categories") return;
-      L.push('  '+JSON.stringify(k)+': '+JSON.stringify(m[k], null, 2).replace(/\n/g,"\n  ")+",");
-    });
-    L.push('  "categories": [');
-    m.categories.forEach(function(c, ci){
-      var head = {};
-      head.id=c.id; head.group=c.group; head.icon=c.icon; if(c.hidden) head.hidden=true; head.name=c.name;
-      Object.keys(c).forEach(function(k){ if(!(k in head) && k!=="items" && k!=="hidden") head[k]=c[k]; });
-      var hs = JSON.stringify(head);
-      L.push("    "+hs.slice(0,-1)+', "items": [');
-      c.items.forEach(function(it, ii){ L.push("      "+JSON.stringify(cleanItem(it))+(ii<c.items.length-1?",":"")); });
-      L.push("    ]}"+(ci<m.categories.length-1?",":""));
-    });
-    L.push("  ]");
-    L.push("};");
-    return L.join("\n")+"\n";
+  function cleanForSave(m){
+    var o = clone(m);
+    o.categories.forEach(function(c){ if(!c.hidden) delete c.hidden; c.items.forEach(function(it){ if(!it.hidden) delete it.hidden; }); });
+    return o;
   }
 
   // ------------------------------------------------------------------ images
-  function imgFile(img){ if(!img) return null; return img.indexOf(".")>=0 ? img : img+".webp"; }
+  var PHOTO_BASE = C.url+"/storage/v1/object/public/"+C.bucket+"/";
+  function isCloud(img){ return /^https?:/.test(img||""); }
+  function imgFile(img){ if(!img) return null; if(isCloud(img)) return img.split("/").pop(); return img.indexOf(".")>=0 ? img : img+".webp"; }
   function imgSrc(img){
     var f = imgFile(img); if(!f) return null;
-    var key = "images/"+f;
-    if(S.newImages[key]) return "data:image/"+(/\.jpe?g$/i.test(f)?"jpeg":"webp")+";base64,"+S.newImages[key];
-    return "images/"+f;
+    if(S.newImages[f]) return "data:image/"+(/\.jpe?g$/i.test(f)?"jpeg":"webp")+";base64,"+S.newImages[f];
+    return isCloud(img) ? img : "images/"+f;
   }
   function processImage(file){
     return new Promise(function(resolve, reject){
@@ -300,8 +206,8 @@
           URL.revokeObjectURL(url);
           var data = c.toDataURL("image/webp", 0.82), ext = "webp";
           if(data.indexOf("data:image/webp")!==0){ data = c.toDataURL("image/jpeg", 0.85); ext = "jpg"; }
-          var name = "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
-          resolve({ value: ext==="webp" ? name : name+"."+ext, path:"images/"+name+"."+ext, b64:data.split(",")[1], dataUrl:data });
+          var name = "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7)+"."+ext;
+          resolve({ value: PHOTO_BASE+name, path:name, b64:data.split(",")[1], dataUrl:data });
         }catch(e){ reject(e); }
       };
       img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("image")); };
@@ -313,139 +219,74 @@
   function markDirty(){ S.dirty = true; saveDraft(); renderStatus(); }
   function saveDraft(){
     try{
-      writeJSON(draftKey(), { menu:S.menu, baseSha:S.baseSha, origText:S.origText, newImages:S.newImages, ts:Date.now() });
+      writeJSON(draftKey(), { menu:S.menu, baseUpdated:S.baseUpdated, newImages:S.newImages, ts:Date.now() });
     }catch(e){
-      try{ writeJSON(draftKey(), { menu:S.menu, baseSha:S.baseSha, origText:S.origText, newImages:{}, ts:Date.now() }); }catch(e2){}
+      try{ writeJSON(draftKey(), { menu:S.menu, baseUpdated:S.baseUpdated, newImages:{}, ts:Date.now() }); }catch(e2){}
       toast(T("draftFull"), "err", 6000);
     }
   }
   function clearDraft(){ try{ localStorage.removeItem(draftKey()); }catch(e){} }
 
   // ------------------------------------------------------------------ load
-  function loadFromGitHub(){
+  function loadMenu(){
     busy(true, T("busyLoad"));
-    return getHeadSha().then(function(sha){
-      return getFileText(DATA_PATH, sha).then(function(text){
-        S.baseSha = sha; S.origText = text; S.menu = parseMenu(text); S.newImages = {}; S.dirty = false;
-      });
-    }).finally(function(){ busy(false); });
+    return C.read().then(function(row){
+      if(row && row.data && row.data.categories){
+        S.menu = normalizeMenu(row.data); S.menu.updatedAt = row.updated_at; S.baseUpdated = row.updated_at;
+        return;
+      }
+      // nothing published to the cloud yet: start from the site's built-in menu
+      return fetch("menu-data.js?t="+Date.now(), { cache:"no-store" }).then(function(r){ return r.text(); })
+        .then(function(t){ S.menu = parseMenu(t); S.baseUpdated = null; });
+    }, function(){ throw new ApiError(0, T("errNet")); })
+    .then(function(){ S.newImages = {}; S.dirty = false; })
+    .finally(function(){ busy(false); });
   }
-  function boot(){
-    applyStaticTexts();
-    if(!cfg.token){ showLogin(); return; }
+  function openEditor(){
     var draft = readJSON(draftKey());
     var p;
     if(draft && draft.menu && confirm(T("draftQ",{d:new Date(draft.ts).toLocaleString()}))){
-      S.menu = draft.menu; S.baseSha = draft.baseSha; S.origText = draft.origText; S.newImages = draft.newImages || {}; S.dirty = true;
+      S.menu = draft.menu; S.baseUpdated = draft.baseUpdated || null; S.newImages = draft.newImages || {}; S.dirty = true;
       p = Promise.resolve();
     } else {
       if(draft) clearDraft();
-      p = loadFromGitHub();
+      p = loadMenu();
     }
-    p.then(showApp).catch(function(e){
-      if(e && e.status===401){ setSessionToken(""); showLogin(errText(e)); }
-      else { showLogin(errText(e)); }
+    return p.then(showApp);
+  }
+  function boot(){
+    applyStaticTexts();
+    if(!S.password){ showLogin(); return; }
+    api({ action:"login" }).then(openEditor).catch(function(e){
+      if(e && e.status===401) setPassword("");
+      showLogin(errText(e));
     });
   }
-
-  // ------------------------------------------------------------------ device code (PIN)
-  // The GitHub key never leaves this device: it is stored here encrypted with the code
-  // (PBKDF2-SHA256 + AES-GCM). Day to day the admin types only the code.
-  var LOCK_KEY = "mg_admin_lock", TOK_KEY = "mg_admin_tok", PBKDF2_ITER = 310000, MAX_FAILS = 10;
-  function bytesToB64(u8){ var s=""; for(var i=0;i<u8.length;i++) s+=String.fromCharCode(u8[i]); return btoa(s); }
-  function b64ToBytes(b64){ var s=atob(b64), u=new Uint8Array(s.length); for(var i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
-  function pinKey(pin, salt, iter){
-    return crypto.subtle.importKey("raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveKey"]).then(function(k){
-      return crypto.subtle.deriveKey({ name:"PBKDF2", salt:salt, iterations:iter, hash:"SHA-256" }, k, { name:"AES-GCM", length:256 }, false, ["encrypt","decrypt"]);
-    });
-  }
-  function encryptToken(token, pin){
-    var salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
-    return pinKey(pin, salt, PBKDF2_ITER).then(function(key){
-      return crypto.subtle.encrypt({ name:"AES-GCM", iv:iv }, key, new TextEncoder().encode(token));
-    }).then(function(ct){
-      return { v:1, iter:PBKDF2_ITER, salt:bytesToB64(salt), iv:bytesToB64(iv), data:bytesToB64(new Uint8Array(ct)), fails:0 };
-    });
-  }
-  function decryptToken(lock, pin){
-    return pinKey(pin, b64ToBytes(lock.salt), lock.iter).then(function(key){
-      return crypto.subtle.decrypt({ name:"AES-GCM", iv:b64ToBytes(lock.iv) }, key, b64ToBytes(lock.data));
-    }).then(function(pt){ return new TextDecoder().decode(pt); });
-  }
-  function getLock(){ var l = readJSON(LOCK_KEY); return (l && l.data) ? l : null; }
-  function saveLocalLock(pin){ return encryptToken(cfg.token, pin).then(function(l){ writeJSON(LOCK_KEY, l); }); }
-  function removeLock(){ try{ localStorage.removeItem(LOCK_KEY); }catch(e){} }
-  function setSessionToken(t){ cfg.token = t || ""; try{ if(t) sessionStorage.setItem(TOK_KEY, t); else sessionStorage.removeItem(TOK_KEY); }catch(e){} }
-  function validPin(p){ return /^\d{4,16}$/.test(p); }
 
   // ------------------------------------------------------------------ login
-  var pinBlockedUntil = 0;
-  function showLogin(err, forceToken){
+  function setPassword(p){ S.password = p || ""; try{ if(p) localStorage.setItem(PASS_KEY, p); else localStorage.removeItem(PASS_KEY); }catch(e){} }
+  function setLoginErr(msg){ $("loginErr").hidden = !msg; $("loginErr").textContent = msg || ""; }
+  function showLogin(err){
     $("app").hidden = true; $("login").hidden = false;
     setLoginErr(err);
-    var lock = getLock(), tokenMode = forceToken || !lock;
-    $("pinBox").hidden = tokenMode;
-    $("tokenBox").hidden = !tokenMode;
-    $("setupNote").hidden = false;
-    $("toPinBtn").hidden = !lock;
-    $("tokenInput").value = (!lock && LEGACY_TOKEN) ? LEGACY_TOKEN : "";
-    $("pinInput").value = "";
-    $("newPinInput").value = "8008";
-    $("newPinHint").textContent = T("newPinHintSet");
-    setTimeout(function(){ (tokenMode ? $("tokenInput") : $("pinInput")).focus(); }, 50);
+    $("passInput").value = "";
+    setTimeout(function(){ $("passInput").focus(); }, 50);
   }
-  function setLoginErr(msg){ $("loginErr").hidden = !msg; $("loginErr").textContent = msg || ""; }
-
-  function enterWithToken(){
-    return gh("").then(function(){ return loadFromGitHub(); }).then(function(){ showApp(); });
-  }
-  function doPinLogin(){
-    var pin = $("pinInput").value.trim(), lock = getLock();
-    if(!pin){ $("pinInput").focus(); return; }
-    if(!lock){ showLogin(T("noLock"), true); return; }
-    var wait = Math.ceil((pinBlockedUntil - Date.now())/1000);
-    if(wait > 0){ setLoginErr(T("pinWait",{s:wait})); return; }
-    $("pinBtn").disabled = true; setLoginErr("");
-    decryptToken(lock, pin).then(function(tok){
-      lock.fails = 0; writeJSON(LOCK_KEY, lock);
-      setSessionToken(tok);
-      busy(true, T("busyLoad"));
-      return enterWithToken().catch(function(e){
-        setSessionToken("");
-        throw (e && e.status===401) ? new ApiError(-2, T("pinStale")) : e;
-      });
-    }, function(){
-      lock.fails = (lock.fails||0) + 1;
-      if(lock.fails >= MAX_FAILS){ removeLock(); throw new ApiError(-3, T("pinWiped")); }
-      writeJSON(LOCK_KEY, lock);
-      if(lock.fails % 5 === 0) pinBlockedUntil = Date.now() + 30000;
-      throw new ApiError(-1, T("pinWrong"));
-    }).catch(function(e){
-      busy(false);
-      if(e && e.status===-3){ showLogin(e.message, true); return; }
-      setLoginErr(e && e.status<0 ? e.message : errText(e));
-      $("pinInput").value = ""; $("pinInput").focus();
-    }).finally(function(){ $("pinBtn").disabled = false; });
-  }
-  function doLogin(){ // owner: GitHub key + code for this device
-    var tok = $("tokenInput").value.trim(), pin = $("newPinInput").value.trim();
-    if(!tok){ $("tokenInput").focus(); return; }
-    if(!validPin(pin)){ setLoginErr(T("pinShort")); $("newPinInput").focus(); return; }
+  function doLogin(){
+    var pass = $("passInput").value.trim();
+    if(!pass){ $("passInput").focus(); return; }
     $("loginBtn").disabled = true; setLoginErr("");
-    setSessionToken(tok);
-    gh("").then(function(){ return saveLocalLock(pin); })
-      .then(function(){ LEGACY_TOKEN = ""; saveCfg(); clearDraft(); return loadFromGitHub(); })
-      .then(function(){ showApp(); })
-      .catch(function(e){ setSessionToken(""); setLoginErr(errText(e)); })
+    S.password = pass;
+    busy(true, T("busyLoad"));
+    api({ action:"login" }).then(function(){ setPassword(pass); return openEditor(); })
+      .catch(function(e){ busy(false); S.password = ""; setLoginErr(errText(e)); $("passInput").value = ""; $("passInput").focus(); })
       .finally(function(){ $("loginBtn").disabled = false; });
   }
-  function lockNow(){ setSessionToken(""); closeSheet(); showLogin(); }
 
   // ------------------------------------------------------------------ static texts / lang
   function applyStaticTexts(){
     document.documentElement.lang = S.lang;
     document.querySelectorAll("[data-t]").forEach(function(el){ el.textContent = T(el.getAttribute("data-t")); });
-    $("howtoList").innerHTML = T("howto").map(function(s){ return "<li>"+s+"</li>"; }).join("");
     $("searchInput").placeholder = T("search");
     ["loginLang","appLang"].forEach(function(id){
       var el = $(id); el.innerHTML = "";
@@ -778,39 +619,17 @@
       '<h3>'+esc(T("settings"))+'<button class="icon-btn sm" data-x>✕</button></h3>'+
       '<p class="muted" style="margin:0 0 6px;font-size:13px">'+esc(T("lastUpdate"))+': <b>'+esc(S.menu.updatedAt ? new Date(S.menu.updatedAt).toLocaleString() : "—")+'</b></p>'+
       langFields("pn", pn, T("priceNote"), true)+
-      '<div class="section-label">'+esc(T("pinLabel"))+'</div>'+
-      '<label class="field"><span>'+esc(T("changePin"))+'</span><input id="sPin" class="pin" type="text" inputmode="numeric" maxlength="16" autocomplete="off">'+
-      '<div class="hint">'+esc(T("newPinHintKeep"))+'</div></label>'+
-      '<div class="section-label">'+esc(T("repoSettings"))+'</div>'+
-      '<div class="row2"><label class="field"><span>'+esc(T("owner"))+'</span><input id="sOwner" value="'+esc(cfg.owner)+'"></label>'+
-      '<label class="field"><span>'+esc(T("repo"))+'</span><input id="sRepo" value="'+esc(cfg.repo)+'"></label></div>'+
-      '<label class="field"><span>'+esc(T("branch"))+'</span><input id="sBranch" value="'+esc(cfg.branch)+'"></label>'+
-      '<div class="sheet-foot"><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-ghost" id="sLock">🔒 '+esc(T("lockNow"))+'</button>'+
-      '<button class="btn btn-danger" id="sLogout">'+esc(T("logout"))+'</button></div>'+
+      '<div class="sheet-foot"><button class="btn btn-danger" id="sLogout">'+esc(T("logout"))+'</button>'+
       '<div class="right"><button class="btn btn-ghost" data-x>'+esc(T("cancel"))+'</button><button class="btn btn-primary" id="sSave">'+esc(T("save"))+'</button></div></div>'
     );
     $("sheet").querySelectorAll("[data-x]").forEach(function(b){ b.onclick = closeSheet; });
-    $("sLock").onclick = lockNow;
     $("sLogout").onclick = function(){
       if(S.dirty && !confirm(T("leaveQ")+" "+T("discardQ"))) return;
-      setSessionToken(""); removeLock(); clearDraft(); S.dirty=false; closeSheet(); showLogin();
+      setPassword(""); clearDraft(); S.dirty=false; closeSheet(); showLogin();
     };
     $("sSave").onclick = function(){
-      var newPin = $("sPin").value.trim();
-      if(newPin){
-        if(!validPin(newPin)){ toast(T("pinShort"), "err"); $("sPin").focus(); return; }
-        busy(true, T("busyPub"));
-        saveLocalLock(newPin).then(function(){ toast(T("pinSaved"), "ok", 6000); }, function(e){ toast(errText(e), "err", 7000); })
-          .finally(function(){ busy(false); });
-      }
       var newPn = readLang("pn");
       if(JSON.stringify(newPn) !== JSON.stringify(pn)){ S.menu.ui = S.menu.ui || {}; S.menu.ui.priceNote = newPn; markDirty(); }
-      var o=$("sOwner").value.trim(), r=$("sRepo").value.trim(), b=$("sBranch").value.trim();
-      var repoChanged = o!==cfg.owner || r!==cfg.repo || b!==cfg.branch;
-      if(repoChanged && o && r && b){
-        cfg.owner=o; cfg.repo=r; cfg.branch=b; saveCfg();
-        closeSheet(); boot(); return;
-      }
       closeSheet(); renderAll();
     };
   }
@@ -818,58 +637,41 @@
   // ------------------------------------------------------------------ publish
   function publish(){
     if(!S.dirty){ toast(T("pubNothing")); return; }
+    // only upload photos that are still used
+    var used = {}; S.menu.categories.forEach(function(c){ c.items.forEach(function(it){ var f=imgFile(it.img); if(f) used[f]=1; }); });
+    var images = Object.keys(S.newImages).filter(function(f){ return used[f]; }).map(function(f){ return { name:f, b64:S.newImages[f] }; });
+    function send(force){
+      return api({ action:"save", menu:cleanForSave(S.menu), baseUpdatedAt:S.baseUpdated, force:!!force, images:images });
+    }
     busy(true, T("busyPub"));
-    var head, text;
-    getHeadSha().then(function(sha){
-      head = sha;
-      if(sha === S.baseSha) return true;
-      return getFileText(DATA_PATH, sha).then(function(cur){ return cur === S.origText || confirm(T("conflict")); });
-    }).then(function(go){
-      if(!go) throw "cancel";
-      S.menu.updatedAt = new Date().toISOString();
-      text = serialize(S.menu);
-      // only upload photos that are still used
-      var used = {}; S.menu.categories.forEach(function(c){ c.items.forEach(function(it){ var f=imgFile(it.img); if(f) used["images/"+f]=1; }); });
-      var paths = Object.keys(S.newImages).filter(function(p){ return used[p]; });
-      return Promise.all(paths.map(function(p){
-        return gh("git/blobs", { method:"POST", body:{ content:S.newImages[p], encoding:"base64" } })
-          .then(function(b){ return { path:p, mode:"100644", type:"blob", sha:b.sha }; });
-      }));
-    }).then(function(entries){
-      entries.push({ path:DATA_PATH, mode:"100644", type:"blob", content:text });
-      return gh("git/commits/"+head).then(function(c){
-        return gh("git/trees", { method:"POST", body:{ base_tree:c.tree.sha, tree:entries } });
-      });
-    }).then(function(tree){
-      return gh("git/commits", { method:"POST", body:{ message:T("cmsg"), tree:tree.sha, parents:[head] } });
-    }).then(function(commit){
-      return gh("git/refs/heads/"+encodeURIComponent(cfg.branch), { method:"PATCH", body:{ sha:commit.sha, force:false } })
-        .then(function(){ return commit.sha; });
-    }).then(function(newSha){
-      S.baseSha = newSha; S.origText = text; S.newImages = {}; S.dirty = false;
+    send(false).catch(function(e){
+      if(e && e.status===409){
+        busy(false);
+        if(!confirm(T("conflict"))) throw "cancel";
+        busy(true, T("busyPub"));
+        return send(true);
+      }
+      throw e;
+    }).then(function(d){
+      S.baseUpdated = d.updatedAt; S.menu.updatedAt = d.updatedAt; S.newImages = {}; S.dirty = false;
       clearDraft(); renderAll();
       toast(T("pubOk"), "ok", 6000);
     }).catch(function(e){
       if(e === "cancel") return;
-      if(e && e.status===422) toast(T("conflict").split(".")[0]+". "+T("errGeneric")+e.message, "err", 7000);
-      else toast(errText(e), "err", 7000);
-      if(e && e.status===401){ setSessionToken(""); showLogin(errText(e)); }
+      toast(errText(e), "err", 7000);
+      if(e && e.status===401){ setPassword(""); showLogin(errText(e)); }
     }).finally(function(){ busy(false); });
   }
 
   function discard(){
     if(!confirm(T("discardQ"))) return;
     clearDraft();
-    loadFromGitHub().then(function(){ S.catId = firstCatId(); renderAll(); }).catch(function(e){ toast(errText(e), "err"); });
+    loadMenu().then(function(){ S.catId = firstCatId(); renderAll(); }).catch(function(e){ toast(errText(e), "err"); });
   }
 
   // ------------------------------------------------------------------ wire up
   $("loginBtn").onclick = doLogin;
-  $("tokenInput").addEventListener("keydown", function(e){ if(e.key==="Enter") doLogin(); });
-  $("pinBtn").onclick = doPinLogin;
-  $("pinInput").addEventListener("keydown", function(e){ if(e.key==="Enter") doPinLogin(); });
-  $("toTokenBtn").onclick = function(){ showLogin("", true); };
-  $("toPinBtn").onclick = function(){ showLogin(""); };
+  $("passInput").addEventListener("keydown", function(e){ if(e.key==="Enter") doLogin(); });
   $("cats").addEventListener("click", onCatsClick);
   $("items").addEventListener("click", onItemsClick);
   $("items").addEventListener("change", onItemsChange);
@@ -882,7 +684,7 @@
   window.addEventListener("beforeunload", function(e){ if(S.dirty){ e.preventDefault(); e.returnValue = T("leaveQ"); } });
 
   // for tests
-  window.__mgAdmin = { serialize:serialize, parseMenu:parseMenu, state:S };
+  window.__mgAdmin = { parseMenu:parseMenu, state:S };
 
   boot();
 })();

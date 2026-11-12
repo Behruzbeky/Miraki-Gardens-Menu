@@ -21,36 +21,11 @@
       <h1 data-t="loginTitle"></h1>
       <p class="muted" data-t="loginText"></p>
 
-      <!-- everyday login: staff code -->
-      <div id="pinBox" hidden>
-        <label class="field">
-          <span data-t="pinLabel"></span>
-          <input id="pinInput" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="16" placeholder="••••">
-        </label>
-        <button class="btn btn-primary btn-wide" id="pinBtn" data-t="loginBtn"></button>
-        <button class="linkbtn" id="toTokenBtn" type="button" data-t="useToken"></button>
-      </div>
-
-      <!-- owner: GitHub key (first setup or recovery) -->
-      <div id="tokenBox" hidden>
-        <p class="setup-note" id="setupNote" data-t="setupNote" hidden></p>
-        <label class="field">
-          <span data-t="tokenLabel"></span>
-          <input id="tokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
-        </label>
-        <label class="field">
-          <span data-t="newPinLabel"></span>
-          <input id="newPinInput" class="pin" type="text" inputmode="numeric" autocomplete="off" maxlength="16">
-          <div class="hint" id="newPinHint"></div>
-        </label>
-        <button class="btn btn-primary btn-wide" id="loginBtn" data-t="loginBtn"></button>
-        <button class="linkbtn" id="toPinBtn" type="button" data-t="usePin" hidden></button>
-        <details class="howto">
-          <summary data-t="howtoTitle"></summary>
-          <ol id="howtoList"></ol>
-        </details>
-      </div>
-
+      <label class="field">
+        <span data-t="passLabel"></span>
+        <input id="passInput" class="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="32" placeholder="••••">
+      </label>
+      <button class="btn btn-primary btn-wide" id="loginBtn" data-t="loginBtn"></button>
       <p class="login-err" id="loginErr" hidden></p>
       <div class="lang-mini" id="loginLang"></div>
     </div>
@@ -98,6 +73,7 @@
   <!-- ===== Toast ===== -->
   <div class="toast" id="toast" hidden></div>
 
+  <script src="cloud-config.js"></script>
   <script src="admin.js"></script>
 </body>
 </html>

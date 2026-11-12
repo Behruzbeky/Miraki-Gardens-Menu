@@ -1,8 +1,28 @@
 /* Miraki Gardens — tablet menu app (Level 1: browse + cart + call waiter)
-   Menu content lives in menu-data.js and is edited with admin.html. */
+   The live menu is edited in admin.html and stored in the cloud (cloud-config.js).
+   menu-data.js is the built-in fallback for the very first start without internet. */
 (function(){
   "use strict";
-  var DATA = window.MENU;
+  var CLOUD_CACHE = "mg_menu_cloud";
+  function readCache(){ try{ var c = JSON.parse(localStorage.getItem(CLOUD_CACHE)||"null"); return c && c.categories ? c : null; }catch(e){ return null; } }
+  function writeCache(m){ try{ localStorage.setItem(CLOUD_CACHE, JSON.stringify(m)); }catch(e){} }
+  function fromCloud(){
+    if(!window.MENU_CLOUD) return Promise.resolve(null);
+    return window.MENU_CLOUD.read().then(function(row){
+      if(!row || !row.data || !row.data.categories) return null;
+      row.data.updatedAt = row.updated_at; return row.data;
+    });
+  }
+  var cached = readCache();
+  if(cached){ startMenu(cached); return; }
+  // first start on this tablet: wait a moment for the cloud menu, otherwise use the built-in one
+  var started = false;
+  function go(m){ if(started) return; started = true; startMenu(m || window.MENU); }
+  setTimeout(function(){ go(null); }, 3500);
+  fromCloud().then(function(m){ if(m) writeCache(m); go(m); }).catch(function(){ go(null); });
+
+  function startMenu(MENU_DATA){
+  var DATA = MENU_DATA;
   var UI = DATA.ui;
 
   var state = {
@@ -29,6 +49,7 @@
 
   function imgFor(item){
     if(!item.img) return null;
+    if(/^https?:/.test(item.img)) return item.img;
     return "images/"+(item.img.indexOf(".")>=0 ? item.img : item.img+".webp");
   }
   function saveCart(){ localStorage.setItem("mg_cart", JSON.stringify(state.cart)); }
@@ -259,21 +280,22 @@
 
   // ---- live menu updates ----
   // When admins publish a new menu, tablets pick it up by themselves:
-  // every few minutes we check menu-data.js and reload once nobody is in the middle of an order.
+  // every few minutes we check the cloud menu and reload once nobody is in the middle of an order.
   var pendingUpdate=false;
   function idle(){ return cartCount()===0 && document.getElementById("orderModal").hidden && !document.getElementById("cart").classList.contains("open"); }
   function checkForUpdate(){
     if(!navigator.onLine) return;
-    fetch("menu-data.js?check="+Date.now(), {cache:"no-store"}).then(function(r){ return r.ok ? r.text() : ""; }).then(function(txt){
-      var m=/"updatedAt"\s*:\s*"([^"]+)"/.exec(txt);
-      if(m && m[1]!==(DATA.updatedAt||"")) pendingUpdate=true;
+    fromCloud().then(function(m){
+      if(m && m.updatedAt!==(DATA.updatedAt||"")){ writeCache(m); pendingUpdate=true; }
       if(pendingUpdate && idle()) location.reload();
     }).catch(function(){});
   }
-  setInterval(checkForUpdate, 3*60*1000);
+  setInterval(checkForUpdate, 2*60*1000);
+  setTimeout(checkForUpdate, 5000);
   setInterval(function(){ if(pendingUpdate && idle()) location.reload(); }, 20*1000);
   document.addEventListener("visibilitychange", function(){ if(!document.hidden) checkForUpdate(); });
 
   // service worker
   if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(function(){}); }
+  } // startMenu
 })();
