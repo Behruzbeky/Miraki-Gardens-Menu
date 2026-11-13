@@ -43,7 +43,7 @@
       delItemQ:"Удалить «{n}» из меню?",
       delCatQ:"Удалить категорию «{n}»?",
       delCatItemsQ:"В категории «{n}» {c} блюд. Удалить категорию вместе со всеми блюдами?",
-      busyLoad:"Загружаю меню…", busyPhoto:"Обрабатываю фото…", busyPub:"Публикую…",
+      busyLoad:"Загружаю меню…", busyPhoto:"Обрабатываю фото…", busyPub:"Публикую…", photosLost:"{n} фото не сохранились в черновике — загрузите их заново (у этих блюд сейчас нет фото).", busyPhotos:"Загружаю фото: {a} из {b}…",
       pubOk:"Опубликовано! Планшеты обновят меню в течение 1–3 минут.",
       pubNothing:"Нет изменений для публикации.",
       conflict:"Меню уже изменили с другого устройства после того, как вы его открыли. Если продолжить — ваши изменения заменят чужие. Продолжить?",
@@ -86,7 +86,7 @@
       delItemQ:"«{n}» menyudan o‘chirilsinmi?",
       delCatQ:"«{n}» kategoriyasi o‘chirilsinmi?",
       delCatItemsQ:"«{n}» kategoriyasida {c} ta taom bor. Kategoriya barcha taomlari bilan o‘chirilsinmi?",
-      busyLoad:"Menyu yuklanmoqda…", busyPhoto:"Rasm tayyorlanmoqda…", busyPub:"E’lon qilinmoqda…",
+      busyLoad:"Menyu yuklanmoqda…", busyPhoto:"Rasm tayyorlanmoqda…", busyPub:"E’lon qilinmoqda…", photosLost:"{n} ta rasm qoralamada saqlanmagan — ularni qayta yuklang (bu taomlarda hozir rasm yo‘q).", busyPhotos:"Rasmlar yuklanmoqda: {a} / {b}…",
       pubOk:"E’lon qilindi! Planshetlar menyuni 1–3 daqiqada yangilaydi.",
       pubNothing:"E’lon qilish uchun o‘zgarish yo‘q.",
       conflict:"Siz ochgandan keyin menyu boshqa qurilmadan o‘zgartirilgan. Davom etsangiz, sizning o‘zgarishlaringiz ularning o‘rnini egallaydi. Davom etilsinmi?",
@@ -216,16 +216,48 @@
   }
 
   // ------------------------------------------------------------------ draft (local autosave)
+  // The menu itself goes to localStorage; new photos go to IndexedDB (localStorage holds only ~5 MB).
+  var idbP = null;
+  function idb(){
+    if(!idbP) idbP = new Promise(function(res, rej){
+      try{
+        var r = indexedDB.open("mg_admin", 1);
+        r.onupgradeneeded = function(){ r.result.createObjectStore("img"); };
+        r.onsuccess = function(){ res(r.result); };
+        r.onerror = function(){ rej(r.error); };
+      }catch(e){ rej(e); }
+    });
+    return idbP;
+  }
+  function idbRun(mode, fn){
+    return idb().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction("img", mode), out = fn(tx.objectStore("img"));
+        tx.oncomplete = function(){ res(out); };
+        tx.onerror = tx.onabort = function(){ rej(tx.error); };
+      });
+    });
+  }
+  function idbPut(name, b64){ return idbRun("readwrite", function(st){ st.put(b64, name); }); }
+  function idbAll(){
+    return idbRun("readonly", function(st){
+      var out = {}, cur = st.openCursor();
+      cur.onsuccess = function(){ var c = cur.result; if(c){ out[c.key] = c.value; c.continue(); } };
+      return out;
+    });
+  }
+  function idbClear(){ return idbRun("readwrite", function(st){ st.clear(); }); }
+
   function markDirty(){ S.dirty = true; saveDraft(); renderStatus(); }
   function saveDraft(){
-    try{
-      writeJSON(draftKey(), { menu:S.menu, baseUpdated:S.baseUpdated, newImages:S.newImages, ts:Date.now() });
-    }catch(e){
-      try{ writeJSON(draftKey(), { menu:S.menu, baseUpdated:S.baseUpdated, newImages:{}, ts:Date.now() }); }catch(e2){}
-      toast(T("draftFull"), "err", 6000);
-    }
+    try{ writeJSON(draftKey(), { menu:S.menu, baseUpdated:S.baseUpdated, ts:Date.now() }); }
+    catch(e){ toast(T("draftFull"), "err", 6000); }
   }
-  function clearDraft(){ try{ localStorage.removeItem(draftKey()); }catch(e){} }
+  function addNewImage(name, b64){
+    S.newImages[name] = b64;
+    idbPut(name, b64).catch(function(){ toast(T("draftFull"), "err", 6000); });
+  }
+  function clearDraft(){ try{ localStorage.removeItem(draftKey()); }catch(e){} idbClear().catch(function(){}); }
 
   // ------------------------------------------------------------------ load
   function loadMenu(){
@@ -247,12 +279,26 @@
     var p;
     if(draft && draft.menu && confirm(T("draftQ",{d:new Date(draft.ts).toLocaleString()}))){
       S.menu = draft.menu; S.baseUpdated = draft.baseUpdated || null; S.newImages = draft.newImages || {}; S.dirty = true;
-      p = Promise.resolve();
+      p = idbAll().then(function(imgs){ for(var k in imgs) S.newImages[k] = imgs[k]; }, function(){})
+        .then(dropLostPhotos);
     } else {
       if(draft) clearDraft();
       p = loadMenu();
     }
     return p.then(showApp);
+  }
+  // A draft saved by an older version could lose new photos (device storage was full).
+  // Remove references to photos that exist neither in the draft nor in the published menu.
+  function dropLostPhotos(){
+    return C.read().then(function(row){
+      var live = {};
+      if(row && row.data) row.data.categories.forEach(function(c){ (c.items||[]).forEach(function(it){ if(it.img) live[it.img] = 1; }); });
+      var lost = 0;
+      S.menu.categories.forEach(function(c){ c.items.forEach(function(it){
+        if(isCloud(it.img) && !S.newImages[imgFile(it.img)] && !live[it.img]){ it.img = ""; lost++; }
+      }); });
+      if(lost){ saveDraft(); setTimeout(function(){ toast(T("photosLost",{n:lost}), "err", 9000); }, 400); }
+    }, function(){});
   }
   function boot(){
     applyStaticTexts();
@@ -346,7 +392,7 @@
     var src = imgSrc(it.img);
     var thumb = src ? '<img src="'+esc(src)+'" alt="" loading="lazy" onerror="this.remove()">' : esc(cat.icon||"🍽");
     var others = LANGS.filter(function(l){ return l!==S.lang; }).map(function(l){ return it.name[l]; }).filter(Boolean).join(" · ");
-    var isNewImg = it.img && S.newImages["images/"+imgFile(it.img)];
+    var isNewImg = it.img && S.newImages[imgFile(it.img)];
     return '<div class="irow'+(it.hidden?" off":"")+'" data-id="'+esc(it.id)+'" data-cat="'+esc(cat.id)+'">'+
       (showCat ? "" :
       '<div class="imoves">'+
@@ -523,7 +569,7 @@
       d.unit = $("iUnit").value.trim();
       d.img = photo.value || "";
       if($("iVis").checked) delete d.hidden; else d.hidden = true;
-      if(photo.pending) S.newImages[photo.pending.path] = photo.pending.b64;
+      if(photo.pending) addNewImage(photo.pending.path, photo.pending.b64);
 
       var newCat = findCat($("iCat").value);
       if(isNew){
@@ -635,30 +681,52 @@
   }
 
   // ------------------------------------------------------------------ publish
+  // Photos are sent in small batches (the server takes a limited number per request);
+  // the menu itself is switched over only with the last request, so tablets never see missing photos.
+  var BATCH_MAX_COUNT = 8, BATCH_MAX_CHARS = 3000000;
   function publish(){
     if(!S.dirty){ toast(T("pubNothing")); return; }
-    // only upload photos that are still used
     var used = {}; S.menu.categories.forEach(function(c){ c.items.forEach(function(it){ var f=imgFile(it.img); if(f) used[f]=1; }); });
     var images = Object.keys(S.newImages).filter(function(f){ return used[f]; }).map(function(f){ return { name:f, b64:S.newImages[f] }; });
-    function send(force){
-      return api({ action:"save", menu:cleanForSave(S.menu), baseUpdatedAt:S.baseUpdated, force:!!force, images:images });
-    }
+    var batches = [], cur = [], size = 0;
+    images.forEach(function(im){
+      if(cur.length && (cur.length >= BATCH_MAX_COUNT || size + im.b64.length > BATCH_MAX_CHARS)){ batches.push(cur); cur = []; size = 0; }
+      cur.push(im); size += im.b64.length;
+    });
+    if(cur.length) batches.push(cur);
+    if(!batches.length) batches.push([]);
+
+    var finalMenu = cleanForSave(S.menu), base, liveMenu;
     busy(true, T("busyPub"));
-    send(false).catch(function(e){
-      if(e && e.status===409){
+    C.read().catch(function(){ throw new ApiError(0, T("errNet")); }).then(function(row){
+      var liveUpdated = row ? row.updated_at : null;
+      if(liveUpdated !== (S.baseUpdated || null)){
         busy(false);
         if(!confirm(T("conflict"))) throw "cancel";
         busy(true, T("busyPub"));
-        return send(true);
       }
-      throw e;
+      base = liveUpdated;
+      if(row){ liveMenu = row.data; return; }
+      // first publish ever: while photos upload, keep the site's built-in menu live
+      return fetch("menu-data.js?t="+Date.now(), { cache:"no-store" }).then(function(r){ return r.text(); })
+        .then(function(t){ liveMenu = cleanForSave(parseMenu(t)); });
+    }).then(function(){
+      var chain = Promise.resolve(), done = 0;
+      batches.forEach(function(batch, k){
+        var last = k === batches.length - 1;
+        chain = chain.then(function(){
+          if(images.length) busy(true, T("busyPhotos", { a:done, b:images.length }));
+          return api({ action:"save", menu: last ? finalMenu : liveMenu, baseUpdatedAt: base, images: batch });
+        }).then(function(d){ base = d.updatedAt; done += batch.length; return d; });
+      });
+      return chain;
     }).then(function(d){
       S.baseUpdated = d.updatedAt; S.menu.updatedAt = d.updatedAt; S.newImages = {}; S.dirty = false;
       clearDraft(); renderAll();
       toast(T("pubOk"), "ok", 6000);
     }).catch(function(e){
       if(e === "cancel") return;
-      toast(errText(e), "err", 7000);
+      toast(e && e.status===409 ? T("conflict").split(".")[0]+"." : errText(e), "err", 7000);
       if(e && e.status===401){ setPassword(""); showLogin(errText(e)); }
     }).finally(function(){ busy(false); });
   }
